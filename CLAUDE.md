@@ -1,0 +1,154 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+Dash UI is the Next.js frontend for the Dash data agent. It provides a chat interface for querying F1 historical data (1950-2020) and displays AI-generated insights, code execution results, and visualizations.
+
+## Commands
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server (port 3000)
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
+```
+
+**Note:** The backend API server (FastAPI) must be running on port 8000. See `../dash-repo/` for backend setup.
+
+## Architecture
+
+### Single-Page Application
+
+The entire UI is in `app/page.js` (~1600 lines). Key sections:
+
+| Lines | Component | Purpose |
+|-------|-----------|---------|
+| 1-90 | Utilities | `extractChart()`, `extractD3Chart()`, `renderMarkdown()` |
+| 90-270 | Chart Components | `ChartImage`, `D3Chart`, `ImageModal` |
+| 270-400 | UI Components | Icons, `CopyableCode`, `CodeBlockItem` |
+| 400-630 | CodePanel | Slide-out panel showing all executed code, export to .py/.R |
+| 630-730 | ToolCall | Collapsible tool execution display (SQL, Python, R) |
+| 730-920 | Message Components | `Message`, `StreamingMsg` with inline charts |
+| 920-1600 | Home (main) | State management, SSE streaming, chat flow, sidebar |
+
+### Data Flow
+
+```
+User Input → POST /chat/stream → SSE Events → UI Updates
+                                    ↓
+                            tool_start → ToolCall (running)
+                            tool_complete → ToolCall (result) + inline Chart
+                            delta → Streaming text
+                            done → Finalize message
+```
+
+### State Management
+
+```javascript
+// In Home component
+const [messages, setMessages] = useState([])      // Chat history
+const [streamEvents, setStreamEvents] = useState([]) // Current streaming response
+const [language, setLanguage] = useState('python')   // Python or R preference
+const [sessionId] = useState(() => generateSessionId()) // Persists across requests
+```
+
+### Message Format
+
+```javascript
+// User message
+{ role: 'user', content: 'Who won most championships?' }
+
+// Assistant message with events (tools + text interleaved)
+{
+  role: 'assistant',
+  events: [
+    { type: 'tool', tool: { name: 'run_sql', args: {...}, result: '...' } },
+    { type: 'text', content: 'Based on the data...' }
+  ]
+}
+```
+
+### Conversations & Permalinks
+
+- Sidebar lists saved conversations via `GET /conversations`
+- Clicking a conversation loads it and updates URL to `?c=<uuid>`
+- Refreshing or sharing the URL reopens the same conversation
+- New conversations get a URL permalink after the first message is sent
+- "New conversation" clears URL back to `/`
+
+## Key Features
+
+### Chart Rendering
+
+Charts are embedded in tool results using markers:
+- **Matplotlib/ggplot2:** `[CHART_BASE64]<base64>[/CHART_BASE64]` → renders as `<img>`
+- **D3.js:** `[D3_CHART]{"code":"...","data":[...]}}[/D3_CHART]` → renders in sandboxed iframe
+
+### Code Panel
+
+Right sidebar shows all executed code (SQL, Python, R) with:
+- Individual copy buttons per block
+- Export to `.py` or `.R` file with boilerplate (DB setup, imports)
+- Language auto-detection based on tools used
+
+### Language Toggle
+
+On home screen, user selects Python or R. This:
+1. Sends `language` field in API request
+2. Updates CodePanel export format
+3. Backend prepends `[USER PREFERS R]` to guide tool selection
+
+## API Integration
+
+```javascript
+// Streaming chat (SSE)
+fetch('http://localhost:8000/chat/stream', {
+  method: 'POST',
+  body: JSON.stringify({ message, session_id, language })
+})
+
+// Clear session history
+fetch('http://localhost:8000/clear', {
+  method: 'POST',
+  body: JSON.stringify({ session_id })
+})
+```
+
+### SSE Event Types
+
+| Event | Action |
+|-------|--------|
+| `tool_start` | Add collapsible ToolCall in "running" state |
+| `tool_complete` | Update ToolCall with result, extract/render charts |
+| `delta` | Append to streaming text content |
+| `done` | Finalize message, clear stream state |
+| `error` | Display error message |
+
+## Styling
+
+- **Framework:** Tailwind CSS v4 with `@tailwindcss/postcss`
+- **Theme:** Light/dark mode via CSS custom properties (`--ink`, `--bg`, `--red`, etc.) and `@media (prefers-color-scheme: dark)`
+- **Fonts:** Newsreader (serif display), Outfit (sans body), JetBrains Mono (code)
+- **Layout:** Max-width 3xl centered, responsive code panel, collapsible sidebar
+
+## File Structure
+
+```
+dash-ui/
+├── app/
+│   ├── page.js       # All UI components and logic
+│   ├── layout.js     # Root layout, metadata
+│   └── globals.css   # Tailwind imports, custom scrollbar
+├── package.json      # Dependencies: next, react, tailwindcss
+├── postcss.config.js # PostCSS with Tailwind
+└── tailwind.config.js
+```
