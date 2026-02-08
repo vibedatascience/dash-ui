@@ -108,6 +108,8 @@ function renderMarkdown(text) {
   html = html.replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold text-[var(--ink)] mt-6 mb-3" style="font-family:var(--font-display)">$1</h1>')
   html = html.replace(/^> (.+)$/gm, '<blockquote class="border-l-3 border-[var(--red)] pl-4 py-1 my-3 text-[var(--ink-2)] bg-[var(--red-s)] rounded-r-lg">$1</blockquote>')
   html = html.replace(/^---+$/gm, '<hr class="border-none h-px bg-[var(--border)] my-4" />')
+  html = html.replace(/---/g, '\u2014')  // em dash
+  html = html.replace(/--/g, '\u2013')   // en dash
   html = html.replace(/^- (.+)$/gm, '<div class="flex gap-2 my-1"><span class="text-[var(--ink-4)] select-none">•</span><span>$1</span></div>')
   html = html.replace(/^(\d+)\. (.+)$/gm, '<div class="flex gap-2 my-1"><span class="text-[var(--ink-4)] select-none min-w-[1.5rem]">$1.</span><span>$2</span></div>')
   // Remove stray newlines between consecutive list items to prevent <br/> spacing
@@ -900,9 +902,13 @@ function ConversationSidebar({ conversations, currentConversationId, onSelectCon
     <aside className="flex flex-col h-screen border-r border-[var(--border)] overflow-hidden" style={{ background: 'var(--bg-warm)' }}>
       {/* Brand */}
       <div className="flex items-center justify-between px-4 py-3.5">
-        <span className="text-[16px] font-medium" style={{ fontFamily: 'var(--font-display)', color: 'var(--ink)' }}>
+        <button
+          onClick={onNewConversation}
+          className="text-[16px] font-medium cursor-pointer hover:opacity-70 transition-opacity"
+          style={{ fontFamily: 'var(--font-display)', color: 'var(--ink)' }}
+        >
           <span style={{ color: 'var(--red)' }}>·</span> Dash
-        </span>
+        </button>
         <button
           onClick={onNewConversation}
           className="w-7 h-7 rounded-md border border-[var(--border)] bg-[var(--bg)] flex items-center justify-center text-[var(--ink-3)] hover:text-[var(--ink)] hover:bg-[var(--bg-raised)] transition-colors"
@@ -1191,8 +1197,91 @@ export default function Home() {
   const suggestions = [
     { title: 'TidyTuesday dataset', description: 'Explore a community dataset from R4DS', query: 'I want to explore a TidyTuesday dataset! Fetch https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/README.md and parse the latest dataset table. Show me a few recent ones to pick from, then I\'ll choose which one to dive into.' },
     { title: 'Stock analysis', description: 'AMZN price trends with yfinance', query: 'Use yfinance to pull AMZN stock data for the past year. Plot the price with a 50-day moving average and highlight any big swings.' },
-    { title: 'World Bank indicators', description: 'GDP, population, or climate data', query: 'Fetch GDP per capita data from the World Bank API for the G7 countries over the last 20 years. Chart the trends and note anything surprising.' },
+    { title: 'International football', description: '50k+ matches from 1872 to today', query: 'I want to explore international football match history. First, download and extract the data by running these shell commands via subprocess:\n\nimport subprocess\nsubprocess.run(["curl", "-L", "-o", "~/Downloads/all-international-football-results.zip", "https://www.kaggle.com/api/v1/datasets/download/patateriedata/all-international-football-results"], check=True)\nsubprocess.run(["unzip", "-o", "~/Downloads/all-international-football-results.zip", "-d", "~/Downloads/football-data/"], check=True)\n\nThen load the CSVs from ~/Downloads/football-data/. The dataset has two files:\n1. all_matches.csv (50,243 matches): columns are date, home_team, away_team, home_score, away_score, tournament, country, neutral\n2. countries_names.csv (289 teams): maps historical names to current names (e.g. West Germany -> Germany, Soviet Union -> Russia) with color_code for viz\n\nKey gotchas: scores include extra time but NOT penalty shootouts. Team names are historical (West Germany, not Germany for pre-1990). Missing dates default to Dec 31.\n\nShow me some interesting analyses to pick from -- like dominant teams by era, biggest upsets, home advantage trends, or World Cup patterns.' },
     { title: 'F1 database', description: 'Query the pre-loaded racing data', query: 'What tables are in the database? Show me who dominated each era of F1 with a chart.' },
+    { title: 'StatsBomb football analytics', description: 'Match events, xG, passing networks, pitch maps', query: `I want to analyze football match data using StatsBomb's free data. First install the packages:
+
+pip install statsbombpy mplsoccer
+
+Here's what's available:
+
+SETUP:
+from statsbombpy import sb
+from mplsoccer import Pitch, VerticalPitch
+import pandas as pd
+
+AVAILABLE FREE COMPETITIONS (use these competition_id and season_id values):
+- La Liga (11): seasons 2004-2021 (season_ids: 37,38,39,40,41,21,22,23,24,25,26,27,2,1,4,42,90 and 1973/74=278)
+- Champions League (16): 1970-2019 (season_ids: 276,71,277,76,44,37,39,41,21,22,23,24,25,26,27,2,1,4)
+- FIFA World Cup (43): 1958,1962,1970,1974,1986,1990,2018,2022 (season_ids: 269,270,272,51,54,55,3,106)
+- UEFA Euro (55): 2020,2024 (season_ids: 43,282)
+- Premier League (2): 2003/04,2015/16 (season_ids: 44,27)
+- Women's World Cup (72): 2019,2023 (season_ids: 30,107)
+- FA WSL (37): 2018-2021 (season_ids: 4,42,90)
+- Copa America (223): 2024 (season_id: 282)
+- Serie A (12): 1986/87,2015/16 (season_ids: 86,27)
+- Ligue 1 (7): 2015/16,2021/22,2022/23 (season_ids: 27,108,235)
+- 1. Bundesliga (9): 2015/16,2023/24 (season_ids: 27,281)
+- MLS (44): 2023 (season_id: 107)
+- Indian Super League (1238): 2021/22 (season_id: 108)
+
+KEY API FUNCTIONS:
+1. sb.competitions() - list all competitions
+2. sb.matches(competition_id=43, season_id=106) - matches for a competition/season
+3. sb.lineups(match_id=3943043) - returns dict keyed by team name, each a DataFrame of players with positions list
+4. sb.events(match_id=3943043) - all events (passes, shots, dribbles, tackles, etc.)
+   - Use split=True to get separate DataFrames per event type
+   - Key columns: type, player, team, location (list [x,y]), minute, second, period
+   - Shot columns: shot_statsbomb_xg, shot_outcome, shot_body_part, shot_end_location, shot_freeze_frame
+   - Pass columns: pass_end_location, pass_outcome (NaN=completed), pass_recipient, pass_height, pass_type
+   - Completed passes have pass_outcome = NaN (not 'Complete')
+
+COORDINATE EXTRACTION (location is a list [x,y]):
+def safe_extract_coords(location):
+    try:
+        if isinstance(location, list) and len(location) >= 2:
+            return pd.Series([float(location[0]), float(location[1])])
+    except:
+        pass
+    return pd.Series([None, None])
+events[['x', 'y']] = events['location'].apply(safe_extract_coords)
+
+PITCH VISUALIZATION WITH MPLSOCCER:
+from mplsoccer import Pitch
+pitch = Pitch(pitch_type='statsbomb', pitch_color='#22312b', line_color='white')
+fig, ax = pitch.draw(figsize=(12, 8))
+pitch.scatter(x_coords, y_coords, ax=ax, s=100, color='red')
+# Use VerticalPitch for vertical orientation
+# StatsBomb pitch: 120x80, (0,0) = bottom-left, x=length, y=width
+
+MATCH ANALYSIS FUNCTION - use this pattern for comprehensive analysis:
+def analyze_match(match_id):
+    events = sb.events(match_id=match_id)
+    lineups = sb.lineups(match_id=match_id)
+    teams = events['possession_team'].dropna().unique()
+    home_team = events[events['type'] == 'Starting XI']['team'].iloc[0]
+    away_team = events[events['type'] == 'Starting XI']['team'].iloc[1]
+    # Build name_map from lineups for short names
+    name_map = {}
+    for team_name in lineups.keys():
+        for idx, player in lineups[team_name].iterrows():
+            name_map[player['player_name']] = player['player_nickname'] if pd.notna(player['player_nickname']) else player['player_name']
+    # Filter event types
+    passes = events[events['type'] == 'Pass'].copy()
+    shots = events[events['type'] == 'Shot'].copy()
+    goals = shots[shots['shot_outcome'] == 'Goal']
+    # Completed passes: pass_outcome is NaN
+    completed = passes[passes['pass_outcome'].isna()]
+    # xG analysis
+    total_xg = shots['shot_statsbomb_xg'].sum()
+
+Show me a list of interesting matches to pick from. I'd love to see:
+- A famous World Cup or Euro match
+- Shot maps and passing networks on a pitch visualization
+- xG timeline and key player stats
+
+Let me choose which match to deep-dive into.` },
+    { title: 'World Bank indicators', description: 'GDP, population, or climate data', query: 'Fetch GDP per capita data from the World Bank API for the G7 countries over the last 20 years. Chart the trends and note anything surprising.' },
   ]
 
   const codeBlockCount = messages.reduce((count, msg) => {
@@ -1322,7 +1411,7 @@ export default function Home() {
                 </div>
 
                 {/* Suggestion cards */}
-                <div className="grid grid-cols-2 gap-3 max-w-xl w-full">
+                <div className="grid grid-cols-2 gap-3 max-w-2xl w-full">
                   {suggestions.map((s, i) => (
                     <button
                       key={i}
