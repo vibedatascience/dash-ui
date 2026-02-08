@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Dash UI is the Next.js frontend for the Dash data agent. It provides a chat interface for querying F1 historical data (1950-2020) and displays AI-generated insights, code execution results, and visualizations.
+Dash UI is the Next.js frontend for the Dash data agent. It provides a chat interface for data analysis — fetch URLs, query databases, run Python/R, and create charts. Works with any data source, not just SQL.
 
 ## Commands
 
@@ -35,7 +35,7 @@ The entire UI is in `app/page.js` (~1600 lines). Key sections:
 | 1-90 | Utilities | `extractChart()`, `extractD3Chart()`, `renderMarkdown()` |
 | 90-270 | Chart Components | `ChartImage`, `D3Chart`, `ImageModal` |
 | 270-400 | UI Components | Icons, `CopyableCode`, `CodeBlockItem` |
-| 400-630 | CodePanel | Slide-out panel showing all executed code, export to .py/.R |
+| 400-630 | CodePanel | Slide-out panel showing all executed code, export to .py/.R/.ipynb |
 | 630-730 | ToolCall | Collapsible tool execution display (SQL, Python, R) |
 | 730-920 | Message Components | `Message`, `StreamingMsg` with inline charts |
 | 920-1600 | Home (main) | State management, SSE streaming, chat flow, sidebar |
@@ -98,6 +98,7 @@ Charts are embedded in tool results using markers:
 Right sidebar shows all executed code (SQL, Python, R) with:
 - Individual copy buttons per block
 - Export to `.py` or `.R` file with boilerplate (DB setup, imports)
+- Export to `.ipynb` Jupyter notebook with user/AI markdown cells, code cells, and captured outputs (text results + base64 chart images)
 - Language auto-detection based on tools used
 
 ### Language Toggle
