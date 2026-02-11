@@ -771,6 +771,7 @@ function Message({ msg, msgIndex, onZoomChart, onEdit, loading }) {
             <div className="relative group max-w-[75%]">
               <div
                 className="px-4 py-3 text-[14px] leading-[1.5]"
+                data-user-msg=""
                 style={{ background: 'var(--ink)', color: 'var(--bg)', borderRadius: '12px 12px 3px 12px' }}
               >
                 {msg.content}
@@ -986,7 +987,8 @@ export default function Home() {
   const [zoomImage, setZoomImage] = useState(null)
   const [codePanelOpen, setCodePanelOpen] = useState(false)
   const [language, setLanguage] = useState('python')
-  const [sessionId] = useState(() => generateSessionId())
+  // sessionId is derived from conversationId — each conversation gets its own backend agent
+  const sessionIdRef = useRef(generateSessionId())
 
   const [conversationId, setConversationId] = useState(null)
   const [conversations, setConversations] = useState([])
@@ -1038,12 +1040,14 @@ export default function Home() {
     try {
       const res = await fetch(`http://localhost:8000/conversations/${convId}`)
       const data = await res.json()
+      // Each conversation uses its own session — no cross-contamination
+      sessionIdRef.current = convId
       setConversationId(convId)
       setMessages(data.messages || [])
       setLanguage(data.language || 'python')
       window.history.replaceState(null, '', `?c=${convId}`)
-      // Restore agent history from saved messages so Claude has context
-      await fetch('http://localhost:8000/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId, messages: data.messages || [] }) })
+      // Restore agent history so Claude can continue this conversation
+      await fetch('http://localhost:8000/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: convId, messages: data.messages || [] }) })
     } catch (e) { console.error('Failed to load conversation:', e) }
   }
 
@@ -1057,12 +1061,11 @@ export default function Home() {
   }
 
   const handleNewConversation = async () => {
+    // Generate a fresh session — completely isolated from previous conversations
+    sessionIdRef.current = generateSessionId()
     setConversationId(null)
     setMessages([])
     window.history.replaceState(null, '', '/')
-    try {
-      await fetch('http://localhost:8000/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }) })
-    } catch (e) { console.error('Failed to clear session:', e) }
   }
 
   const stopGeneration = () => {
@@ -1073,9 +1076,14 @@ export default function Home() {
   }
 
   const handleEditMessage = async (msgIndex, newText) => {
-    setMessages(messages.slice(0, msgIndex))
+    const truncatedMessages = messages.slice(0, msgIndex)
+    setMessages(truncatedMessages)
     try {
-      await fetch('http://localhost:8000/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }) })
+      // Clear the agent and restore only the messages up to the edit point
+      await fetch('http://localhost:8000/clear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionIdRef.current }) })
+      if (truncatedMessages.length > 0) {
+        await fetch('http://localhost:8000/restore', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionIdRef.current, messages: truncatedMessages }) })
+      }
     } catch (e) { console.error('Failed to clear session:', e) }
     setTimeout(() => send(newText), 100)
   }
@@ -1087,6 +1095,8 @@ export default function Home() {
     if (!currentConvId) {
       currentConvId = await createNewConversation()
       if (currentConvId) {
+        // Tie the session to this conversation — isolated backend agent
+        sessionIdRef.current = currentConvId
         setConversationId(currentConvId)
         window.history.replaceState(null, '', `?c=${currentConvId}`)
       }
@@ -1108,7 +1118,7 @@ export default function Home() {
       const res = await fetch('http://localhost:8000/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, session_id: sessionId, language }),
+        body: JSON.stringify({ message: text, session_id: sessionIdRef.current, language }),
         signal: abortControllerRef.current.signal,
       })
 
